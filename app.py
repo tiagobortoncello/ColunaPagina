@@ -25,7 +25,7 @@ def process_legislative_pdf(uploaded_file):
     }
     
     pattern_norma = re.compile(
-        r"^(LEI COMPLEMENTAR|LEI|RESOLUÇÃO|EMENDA À CONSTITUIÇÃO|DELIBERAÇÃO DA MESA)\s+Nº\s+(\d{1,5}(?:\.\d{0,3})?),\s+DE\s+(\d{1,2})\s+DE\s+(" + "|".join(meses.keys()) + r")\s+DE\s+(\d{4})",
+        r"^(LEI COMPLEMENTAR|LEI|RESOLUÇÃO|EMENDA À CONSTITUIÇÃO|DELIBERAÇÃO DA MESA)\s+Nº\s+([\d\.]+),\s+DE\s+(\d{1,2})\s+DE\s+(" + "|".join(meses.keys()) + r")\s+DE\s+(\d{4})",
         re.MULTILINE | re.IGNORECASE
     )
 
@@ -40,7 +40,8 @@ def process_legislative_pdf(uploaded_file):
             continue
         
         for match in pattern_norma.finditer(text):
-            norma_completa = match.group(0)
+            tipo = match.group(1)
+            numero = match.group(2)
             dia = match.group(3)
             mes_extenso = match.group(4).upper()
             ano = match.group(5)
@@ -48,9 +49,9 @@ def process_legislative_pdf(uploaded_file):
             mes_numero = meses.get(mes_extenso)
             if mes_numero:
                 data_san = f"{int(dia):02d}/{mes_numero}/{ano}"
-                normas.append([page_num, 1, norma_completa, data_san])
+                normas.append([page_num, 1, tipo, numero, data_san, ano])
     
-    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Norma', 'Data de sanção'])
+    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Tipo', 'Número', 'Data de sanção', 'Ano'])
 
     # ==========================
     # ABA 2, 3 e 4: Proposições, Requerimentos e Pareceres
@@ -124,7 +125,7 @@ def process_legislative_pdf(uploaded_file):
     
     header_match = nao_recebidas_header_pattern.search(text_full)
     if header_match:
-        start_idx = header_match.end()
+        start_idx = header.end()
         next_section_pattern = re.compile(r"^\s*(\*?)\s*.*\s*(\*?)\s*$", re.MULTILINE)
         next_section_match = next_section_pattern.search(text_full, start_idx)
         end_idx = next_section_match.start() if next_section_match else len(text_full)
@@ -292,7 +293,7 @@ def run_app():
                 
                 with pd.ExcelWriter(output, engine="openpyxl") as writer:
                     for sheet_name, df in extracted_data.items():
-                        df.to_excel(writer, sheet_name=sheet_name, index=False, header=True)
+                        df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
                 
                 output.seek(0)
                 download_data = output
