@@ -1,15 +1,3 @@
-# Importar bibliotecas necessárias
-import streamlit as st
-import re
-import pandas as pd
-from PyPDF2 import PdfReader
-import io
-import csv
-import fitz
-from datetime import datetime
-
-# --- Funções de Processamento ---
-
 def process_legislative_pdf(uploaded_file):
     """
     Extrai dados de normas, proposições, requerimentos e pareceres do Diário do Legislativo.
@@ -40,6 +28,9 @@ def process_legislative_pdf(uploaded_file):
             continue
         
         for match in pattern_norma.finditer(text):
+            # Captura a string completa da norma
+            norma_completa = match.group(0)
+            
             dia = match.group(3)
             mes_extenso = match.group(4).upper()
             ano = match.group(5)
@@ -47,14 +38,14 @@ def process_legislative_pdf(uploaded_file):
             mes_numero = meses.get(mes_extenso)
             if mes_numero:
                 data_san = f"{int(dia):02d}/{mes_numero}/{ano}"
-                normas.append([page_num, 1, data_san])
+                # Adiciona a norma completa à lista
+                normas.append([page_num, 1, norma_completa, data_san])
     
-    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Data de sanção'])
+    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Norma', 'Data de sanção'])
 
     # ==========================
     # ABA 2, 3 e 4: Proposições, Requerimentos e Pareceres
     # ==========================
-    # Para estas seções, o texto do PDF inteiro é necessário.
     uploaded_file.seek(0)
     text_full = "".join([p.extract_text() for p in PdfReader(uploaded_file).pages if p.extract_text()])
 
@@ -188,148 +179,3 @@ def process_legislative_pdf(uploaded_file):
         "Requerimentos": df_requerimentos,
         "Pareceres": df_pareceres
     }
-
-def process_administrative_pdf(pdf_bytes):
-    """
-    Processa bytes de um arquivo PDF para extrair normas administrativas e retorna dados CSV.
-    """
-    try:
-        doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-    except Exception as e:
-        st.error(f"Erro ao abrir o arquivo PDF: {e}")
-        return None
-
-    resultados = []
-    regex = re.compile(
-        r'(DELIBERAÇÃO DA MESA|PORTARIA DGE|ORDEM DE SERVIÇO PRES/PSEC)\s+Nº\s+([\d\.]+)\/(\d{4})'
-    )
-    regex_dcs = re.compile(r'DECIS[ÃA]O DA 1ª-SECRETARIA')
-
-    for page in doc:
-        text = page.get_text("text")
-        text = re.sub(r'\s+', ' ', text)
-
-        for match in regex.finditer(text):
-            tipo_texto = match.group(1)
-            numero = match.group(2).replace('.', '')
-            ano = match.group(3)
-
-            if tipo_texto.startswith("DELIBERAÇÃO DA MESA"):
-                sigla = "DLB"
-            elif tipo_texto.startswith("PORTARIA"):
-                sigla = "PRT"
-            elif tipo_texto.startswith("ORDEM DE SERVIÇO"):
-                sigla = "OSV"
-            else:
-                continue
-            resultados.append([sigla, numero, ano])
-
-        if regex_dcs.search(text):
-            resultados.append(["DCS", "", ""])
-    doc.close()
-
-    output_csv = io.StringIO()
-    writer = csv.writer(output_csv, delimiter="\t")
-    writer.writerows(resultados)
-    return output_csv.getvalue().encode('utf-8')
-
-# --- Função Principal da Aplicação ---
-
-def run_app():
-    # --- Custom CSS para estilizar os títulos ---
-    st.markdown("""
-        <style>
-        .title-container {
-            text-align: center;
-            background-color: #f0f0f0;
-            padding: 20px;
-            border-radius: 10px;
-            margin-bottom: 20px;
-        }
-        .main-title {
-            color: #d11a2a;
-            font-size: 3em;
-            font-weight: bold;
-            margin-bottom: 0;
-        }
-        .subtitle-gil {
-            color: gray;
-            font-size: 1.5em;
-            margin-top: 5px;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
-    # --- Título e informações ---
-    st.markdown("""
-        <div class="title-container">
-            <h1 class="main-title">Extrator de Documentos Oficiais</h1>
-            <h4 class="subtitle-gil">GERÊNCIA DE INFORMAÇÃO LEGISLATIVA - GIL/GDI</h4>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.divider()
-
-    # --- Seletor de tipo de Diário ---
-    diario_escolhido = st.radio(
-        "Selecione o tipo de Diário para extração:",
-        ('Legislativo', 'Administrativo', 'Executivo (Em breve)'),
-        horizontal=True
-    )
-    
-    st.divider()
-
-    uploaded_file = st.file_uploader(f"Faça o upload do arquivo PDF do **Diário {diario_escolhido}**.", type="pdf")
-
-    if uploaded_file is not None:
-        try:
-            if diario_escolhido == 'Legislativo':
-                with st.spinner('Extraindo dados do Diário do Legislativo...'):
-                    extracted_data = process_legislative_pdf(uploaded_file)
-
-                output = io.BytesIO()
-                excel_file_name = "Legislativo_Extraido.xlsx"
-                
-                with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                    for sheet_name, df in extracted_data.items():
-                        df.to_excel(writer, sheet_name=sheet_name, index=False, header=True)
-                
-                output.seek(0)
-                download_data = output
-                file_name = excel_file_name
-                mime_type = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-
-            elif diario_escolhido == 'Administrativo':
-                pdf_bytes = uploaded_file.read()
-                
-                with st.spinner('Extraindo dados do Diário Administrativo...'):
-                    csv_data = process_administrative_pdf(pdf_bytes)
-
-                download_data = csv_data
-                file_name = "Administrativo_Extraido.csv"
-                mime_type = "text/csv"
-
-            else: # Executivo (placeholder)
-                st.info("A funcionalidade para o Diário do Executivo ainda está em desenvolvimento.")
-                download_data = None
-                file_name = None
-                mime_type = None
-
-            if download_data:
-                st.success("Dados extraídos com sucesso! ✅")
-                st.divider()
-                st.download_button(
-                    label="Clique aqui para baixar o arquivo",
-                    data=download_data,
-                    file_name=file_name,
-                    mime=mime_type
-                )
-                st.info(f"O download do arquivo **{file_name}** está pronto.")
-
-        except Exception as e:
-            st.error(f"Ocorreu um erro ao processar o arquivo: {e}")
-            st.error(f"Detalhes do erro: {e}")
-
-# Executa a função principal
-if __name__ == "__main__":
-    run_app()
