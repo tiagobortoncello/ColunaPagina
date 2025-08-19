@@ -49,9 +49,9 @@ def process_legislative_pdf(uploaded_file):
             mes_numero = meses.get(mes_extenso)
             if mes_numero:
                 data_san = f"{int(dia):02d}/{mes_numero}/{ano}"
-                normas.append([page_num, 1, tipo, numero, data_san, ano])
+                normas.append([page_num, 1, data_san, tipo, numero])
     
-    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Tipo', 'Número', 'Data de sanção', 'Ano'])
+    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Data de sanção', 'Tipo', 'Numeração'])
 
     # ==========================
     # ABA 2, 3 e 4: Proposições, Requerimentos e Pareceres
@@ -125,7 +125,7 @@ def process_legislative_pdf(uploaded_file):
     
     header_match = nao_recebidas_header_pattern.search(text_full)
     if header_match:
-        start_idx = header.end()
+        start_idx = header_match.end()
         next_section_pattern = re.compile(r"^\s*(\*?)\s*.*\s*(\*?)\s*$", re.MULTILINE)
         next_section_match = next_section_pattern.search(text_full, start_idx)
         end_idx = next_section_match.start() if next_section_match else len(text_full)
