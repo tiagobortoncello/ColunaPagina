@@ -1,3 +1,13 @@
+# Importar bibliotecas necessárias
+import streamlit as st
+import re
+import pandas as pd
+from PyPDF2 import PdfReader
+import io
+import csv
+import fitz
+from datetime import datetime
+
 # --- Funções de Processamento ---
 
 def process_legislative_pdf(uploaded_file):
@@ -15,7 +25,7 @@ def process_legislative_pdf(uploaded_file):
     }
     
     pattern_norma = re.compile(
-        r"^(LEI COMPLEMENTAR|LEI|RESOLUÇÃO|EMENDA À CONSTITUIÇÃO|DELIBERAÇÃO DA MESA)\s+Nº\s+([\d\.]+),\s+DE\s+(\d{1,2})\s+DE\s+(" + "|".join(meses.keys()) + r")\s+DE\s+(\d{4})",
+        r"^(LEI COMPLEMENTAR|LEI|RESOLUÇÃO|EMENDA À CONSTITUIÇÃO|DELIBERAÇÃO DA MESA)\s+Nº\s+(\d{1,5}(?:\.\d{0,3})?),\s+DE\s+(\d{1,2})\s+DE\s+(" + "|".join(meses.keys()) + r")\s+DE\s+(\d{4})",
         re.MULTILINE | re.IGNORECASE
     )
 
@@ -30,8 +40,7 @@ def process_legislative_pdf(uploaded_file):
             continue
         
         for match in pattern_norma.finditer(text):
-            tipo = match.group(1)
-            numero = match.group(2)
+            norma_completa = match.group(0)
             dia = match.group(3)
             mes_extenso = match.group(4).upper()
             ano = match.group(5)
@@ -39,10 +48,9 @@ def process_legislative_pdf(uploaded_file):
             mes_numero = meses.get(mes_extenso)
             if mes_numero:
                 data_san = f"{int(dia):02d}/{mes_numero}/{ano}"
-                norma_completa = f"{tipo} Nº {numero}, DE {dia} DE {mes_extenso} DE {ano}"
-                normas.append([page_num, 1, data_san, norma_completa, ano])
+                normas.append([page_num, 1, norma_completa, data_san])
     
-    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Data de sanção', 'Norma', 'Ano'])
+    df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Norma', 'Data de sanção'])
 
     # ==========================
     # ABA 2, 3 e 4: Proposições, Requerimentos e Pareceres
