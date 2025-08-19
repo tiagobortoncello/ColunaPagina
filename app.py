@@ -41,7 +41,8 @@ def process_legislative_pdf(uploaded_file):
         
         for match in pattern_norma.finditer(text):
             tipo = match.group(1)
-            numero = match.group(2)
+            numero_com_ponto = match.group(2)
+            numero_sem_ponto = numero_com_ponto.replace('.', '')
             dia = match.group(3)
             mes_extenso = match.group(4).upper()
             ano = match.group(5)
@@ -49,7 +50,7 @@ def process_legislative_pdf(uploaded_file):
             mes_numero = meses.get(mes_extenso)
             if mes_numero:
                 data_san = f"{int(dia):02d}/{mes_numero}/{ano}"
-                normas.append([page_num, 1, data_san, tipo, numero])
+                normas.append([page_num, 1, data_san, tipo, numero_sem_ponto])
     
     df_normas = pd.DataFrame(normas, columns=['Página', 'Coluna', 'Data de sanção', 'Tipo', 'Numeração'])
 
